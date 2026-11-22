@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>org.lastbook.Lastbook</id>
+  <name>Lastbook</name>
+  <summary>Offline survival library</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+  <url type="homepage">https://lastbook.org</url>
+  <url type="vcs-browser">https://github.com/Immortal-Protocols/lastbook</url>
+  <developer id="org.lastbook">
+    <name>Lastbook</name>
+  </developer>
+  <description>
+    <p>Lastbook searches and reads a survival library kept on this computer: guides, manuals, videos, maps and an encyclopedia, with no internet. It opens no network port. Setup downloads the library the first time; nothing else goes online unless you ask it to check for a newer version.</p>
+  </description>
+  <launchable type="desktop-id">org.lastbook.Lastbook.desktop</launchable>
+  <screenshots>
+    <screenshot type="default">
+      <image>https://raw.githubusercontent.com/Immortal-Protocols/lastbook/v1.1.15/website-next/directions/bold-public/img/light-videos-1000.jpg</image>
+      <caption>Videos, with transcripts, kept on this computer</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://raw.githubusercontent.com/Immortal-Protocols/lastbook/v1.1.15/website-next/directions/bold-public/img/light-pdf-1000.jpg</image>
+      <caption>A manual page, found by search</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://raw.githubusercontent.com/Immortal-Protocols/lastbook/v1.1.15/website-next/directions/bold-public/img/light-map-944.jpg</image>
+      <caption>The offline map</caption>
+    </screenshot>
+  </screenshots>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="1.1.15" date="2026-11-21"/>
+  </releases>
+</component>

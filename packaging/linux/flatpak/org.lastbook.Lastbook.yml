@@ -1,0 +1,106 @@
+# Prototype Flatpak for Lastbook (https://github.com/Immortal-Protocols/lastbook).
+# Builds the same /opt/lastbook tree as packaging/linux/build_app_linux.sh, rooted at /app/lastbook, on the GNOME runtime,
+# which supplies Python 3.14, PyGObject, GTK 3, WebKitGTK 4.1 and GStreamer (dav1d; H.264 through codecs-extra).
+# Every source is pinned by commit or SHA-256, so the build needs no network.
+#
+#   flatpak-builder --user --install --force-clean build org.lastbook.Lastbook.yml
+#   flatpak run org.lastbook.Lastbook [--data /path/to/LastbookData]
+app-id: org.lastbook.Lastbook
+runtime: org.gnome.Platform
+runtime-version: '51'
+sdk: org.gnome.Sdk
+command: lastbook
+finish-args:
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --share=ipc
+  - --device=dri            # WebKit's drawing; Vulkan for the local AI runner
+  - --socket=pulseaudio     # sound for videos
+  - --share=network         # setup's downloads and the Check for updates button only (ALLOWED_HOSTS, pinned roots)
+modules:
+  - name: lastbook
+    buildsystem: simple
+    build-commands:
+      # web/ and content/ as they ship (stdlib only)
+      - python3 -I -B packaging/ship_app_files.py ship
+      - install -d /app/lastbook/app /app/lastbook/engine/setup /app/lastbook/setup /app/lastbook/lib /app/lastbook/gst
+      # program files: the list in build_app_linux.sh
+      - cp app/main.py app/bridge.py app/shell_linux.py app/ui_language.py /app/lastbook/app/
+      - cp server.py retrieval.py assistant.py llm_local.py packaging/linux/lastbook.py /app/lastbook/
+      - cp engine/__init__.py engine/paths.py engine/library.py engine/safe_paths.py engine/encyclopedias.py engine/saved_pages.py
+        engine/address_search.py engine/page_tables.py engine/update.py engine/notes.py /app/lastbook/engine/
+      - cp engine/setup/*.py engine/setup/roots.pem /app/lastbook/engine/setup/
+      - cp -R ship/web ship/content /app/lastbook/
+      - cp manifest-v1.json /app/lastbook/setup/
+      - echo 1.1.15 > /app/lastbook/VERSION
+      # the pinned wheels, from the sources below, for the runtime's Python
+      - 'pip3 install --no-index --no-deps --only-binary=:all: --no-compile --target /app/lastbook/lib wheels/*.whl'
+      - rm -rf /app/lastbook/lib/bin /app/lastbook/lib/numpy/tests /app/lastbook/lib/numpy/_core/tests /app/lastbook/lib/numpy/f2py
+        /app/lastbook/lib/numpy/testing /app/lastbook/lib/pypdfium2_cli
+      - find /app/lastbook/lib -depth \( -name tests -o -name testing -o -name __pycache__ \) -type d -exec rm -rf {} +
+      # lastbooksrc: the GStreamer source for lastbook://app/videos/
+      - gcc -shared -fPIC -O2 -Wall -Werror -s packaging/linux/gst/lastbooksrc.c -o /app/lastbook/gst/libgstlastbooksrc.so
+        $(pkg-config --cflags --libs gstreamer-1.0 gstreamer-base-1.0)
+      - python3 -I -m compileall -q -j 0 /app/lastbook
+      # launcher, menu entry, icon, metainfo
+      - install -d /app/bin
+      - printf '#!/bin/sh\nexec /usr/bin/python3 -I -B /app/lastbook/lastbook.py "$@"\n' > /app/bin/lastbook
+      - chmod 755 /app/bin/lastbook
+      - sed -e 's|^Exec=.*|Exec=lastbook|' -e 's|^Icon=.*|Icon=org.lastbook.Lastbook|' packaging/linux/lastbook.desktop
+        | install -Dm644 /dev/stdin /app/share/applications/org.lastbook.Lastbook.desktop
+      - install -Dm644 org.lastbook.Lastbook.png /app/share/icons/hicolor/512x512/apps/org.lastbook.Lastbook.png
+      - install -Dm644 org.lastbook.Lastbook.metainfo.xml /app/share/metainfo/org.lastbook.Lastbook.metainfo.xml
+    sources:
+      - type: git
+        url: https://github.com/Immortal-Protocols/lastbook.git
+        tag: v1.1.15
+        commit: bb307c8766425087e5e62766190b264b360a4e04
+      - type: file
+        path: manifest-v1.json          # the setup manifest; release builds make it with packaging/release_manifest.py
+      - type: file
+        path: org.lastbook.Lastbook.metainfo.xml
+      - type: file
+        path: org.lastbook.Lastbook.png   # packaging/icon/tile-1024.png at 512 px (Flatpak takes up to 512)
+      # requirements_linux.txt pins, plus what they depend on
+      - type: file
+        dest: wheels
+        only-arches: [x86_64]
+        url: https://files.pythonhosted.org/packages/31/f3/16820fa6041ecbf6c6b54d1b3dcc23e3489f71447870f36a3d2779092434/libzim-3.13.1-cp314-cp314-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl
+        sha256: bc29b54e91690de33706d765605d3ca9a63e066ce70175f51bf1169ba63bef70
+      - type: file
+        dest: wheels
+        only-arches: [aarch64]
+        url: https://files.pythonhosted.org/packages/b6/98/08ce16f4e3d6ec20a8c775272943efda63cd077ef9ebd0e64b83df544f9c/libzim-3.13.1-cp314-cp314-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl
+        sha256: 77864105f08cceaf8ad3c9d7d4a9cc682a33b4962ac0ee1c31976e5330b24dc8
+      - type: file
+        dest: wheels
+        only-arches: [x86_64]
+        url: https://files.pythonhosted.org/packages/f3/eb/ebffaa97dc55502df69584a8f0dcf07f69a3e0b3e2323670a2722db9aa39/numpy-2.4.6-cp314-cp314-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl
+        sha256: a2c306dea656c12c68f51f4cea133cbe78ca7435eb28c735eac1d3ebe73be6e8
+      - type: file
+        dest: wheels
+        only-arches: [aarch64]
+        url: https://files.pythonhosted.org/packages/d5/91/64288395ee1799bd2e0b04a305dce9666da90c961e1f3fe982a05ee1c036/numpy-2.4.6-cp314-cp314-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl
+        sha256: 40fdc1ae7125e518ea98e53e69a4ebc27e1fd50510c47b7ea130cf21e5e1d42b
+      - type: file
+        dest: wheels
+        only-arches: [x86_64]
+        url: https://files.pythonhosted.org/packages/4f/a3/c9cc797fc8bdfb8f37b9b0f8b9d02a5fc196b2015f408d53624cab5b0519/pypdfium2-5.14.0-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
+        sha256: 11f281613fa22313d9c7ab89947665e84eccf8ebe40e1198a84a88352305648d
+      - type: file
+        dest: wheels
+        only-arches: [aarch64]
+        url: https://files.pythonhosted.org/packages/92/b4/0c31aa51887cd6cd032191dfe010a6d01ed43cf03204cfbd2184ebe4b715/pypdfium2-5.14.0-py3-none-manylinux_2_17_aarch64.manylinux2014_aarch64.whl
+        sha256: f1b696e6901e16f114a2ec6332e5e3f8f5033a901614ead28499ab18ca6024f5
+      - type: file
+        dest: wheels
+        url: https://files.pythonhosted.org/packages/88/c6/92fcd42f1ba33e1184263f25bfabf3d27c383410470f169e4b8163bf9c17/beautifulsoup4-4.15.0-py3-none-any.whl
+        sha256: d6f88de62e1d4e38ecb1077eb9724cd0eff29d2a08ca16a401e9b9e93f117cf9
+      - type: file
+        dest: wheels
+        url: https://files.pythonhosted.org/packages/f6/f7/be207468cac6ad79389f36cf1fce4f2836960df91659979ec486c727bb2e/soupsieve-4.1.3-py3-none-any.whl
+        sha256: 7a390d1a57d1ab7bb228531e9b8a750a5ebf87db774e0ef6faeeac057d22a5bf
+      - type: file
+        dest: wheels
+        url: https://files.pythonhosted.org/packages/49/d3/b8441a820a491ddfc024b0b0cf0393375b75ea13866d9c66727e54c2fc80/typing_extensions-4.16.0-py3-none-any.whl
+        sha256: 481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8
